@@ -887,7 +887,7 @@
       </div>
     </div>
 
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;" id="ttsVoiceRow" style="opacity:0.35;pointer-events:none;">
+    <div id="ttsVoiceRow" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;opacity:0.35;pointer-events:none;">
       <select class="tts-voice-select" id="ttsVoiceSelect" style="flex:1;min-width:160px;">
         <option>🔊 음성 로딩 중... (토글을 껐다 켜보세요)</option>
       </select>
@@ -1849,16 +1849,23 @@ ttsVolSlider.addEventListener('input', () => {
 // ── 토글 ─────────────────────────────────────────────
 ttsToggle.addEventListener('change', () => {
   ttsEnabled = ttsToggle.checked;
-  ttsControls.style.opacity       = ttsEnabled ? '1'    : '0.35';
-  ttsControls.style.pointerEvents = ttsEnabled ? 'auto' : 'none';
-  ttsVoiceRow.style.opacity       = ttsEnabled ? '1'    : '0.35';
-  ttsVoiceRow.style.pointerEvents = ttsEnabled ? 'auto' : 'none';
+
+  // ✅ style 속성 직접 세팅 (충돌 없이 명시적으로)
+  [ttsControls, ttsVoiceRow].forEach(el => {
+    el.style.setProperty('opacity',        ttsEnabled ? '1'    : '0.35');
+    el.style.setProperty('pointer-events', ttsEnabled ? 'auto' : 'none');
+  });
+
   ttsOnLabel.classList.toggle('show', ttsEnabled);
-  if(!ttsEnabled) { synth.cancel(); ttsWave.classList.remove('show'); fsTtsWave.classList.remove('show'); }
-  // 토글 켤 때 항상 음성 목록 다시 시도
-  if(ttsEnabled) {
-    setTimeout(()=> loadVoices(false), 100);
+
+  if(!ttsEnabled) {
+    synth.cancel();
+    ttsWave.classList.remove('show');
+    fsTtsWave.classList.remove('show');
+    setTtsStatus('', '');
+  } else {
     setTtsStatus('🔄 음성 목록 불러오는 중...', '#f0b429');
+    setTimeout(()=> loadVoices(false), 150);
   }
 });
 
