@@ -889,10 +889,12 @@
 
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;" id="ttsVoiceRow" style="opacity:0.35;pointer-events:none;">
       <select class="tts-voice-select" id="ttsVoiceSelect" style="flex:1;min-width:160px;">
-        <option>🔊 음성 로딩 중...</option>
+        <option>🔊 음성 로딩 중... (토글을 껐다 켜보세요)</option>
       </select>
+      <button class="tts-test-btn" id="ttsReloadBtn" title="음성 목록 새로고침">↺</button>
       <button class="tts-test-btn" id="ttsTstBtn">▶ 테스트</button>
     </div>
+    <div id="ttsStatusMsg" style="font-family:'Space Mono',monospace;font-size:0.6rem;color:#64748b;margin-top:6px;letter-spacing:0.06em;"></div>
   </div>
 
   <!-- Toolbar: 전체화면 + QR -->
@@ -1749,35 +1751,85 @@ let ttsVol      = 1.0;
 let ttsEnVoice  = null;   // 선택된 영어 음성
 
 // ── 음성 목록 로드 ──────────────────────────────────
-function loadVoices() {
-  ttsVoices = synth.getVoices().filter(v => v.lang.startsWith('en'));
-  if(!ttsVoices.length) return;
+const ttsStatusMsg = document.getElementById('ttsStatusMsg');
+const ttsReloadBtn = document.getElementById('ttsReloadBtn');
+let voiceLoadRetry = 0;
+
+function setTtsStatus(msg, color) {
+  if(ttsStatusMsg) { ttsStatusMsg.textContent = msg; ttsStatusMsg.style.color = color || '#64748b'; }
+}
+
+function loadVoices(showFeedback) {
+  const all = synth.getVoices();
+  ttsVoices = all.filter(v => v.lang.startsWith('en'));
+
+  if(!ttsVoices.length) {
+    // Chrome: 음성은 있지만 아직 en만 없는 경우 — 전체 목록 fallback
+    const allVoices = all.filter(v => v.lang);
+    if(allVoices.length) {
+      // 전체 음성이라도 일단 로드
+      ttsVoices = allVoices;
+    } else {
+      setTtsStatus('⚠️ 아직 음성 목록을 불러오지 못했습니다. ↺ 버튼을 눌러보세요.', '#f0b429');
+      return;
+    }
+  }
 
   ttsVoiceSel.innerHTML = '';
-  ttsVoices.forEach((v, i) => {
-    const opt = document.createElement('option');
-    opt.value = i;
-    // 원어민(en-US / en-GB) 강조
-    const flag = v.lang === 'en-US' ? '🇺🇸' : v.lang === 'en-GB' ? '🇬🇧' : '🔊';
+
+  // 영어 음성 먼저, 나머지 뒤에
+  const enVoices  = ttsVoices.filter(v => v.lang.startsWith('en'));
+  const etcVoices = ttsVoices.filter(v => !v.lang.startsWith('en'));
+  const sorted    = [...enVoices, ...etcVoices];
+  ttsVoices = sorted;  // 순서 재정렬
+
+  sorted.forEach((v, i) => {
+    const opt  = document.createElement('option');
+    opt.value  = i;
+    const flag = v.lang === 'en-US' ? '🇺🇸'
+               : v.lang === 'en-GB' ? '🇬🇧'
+               : v.lang === 'en-AU' ? '🇦🇺'
+               : v.lang.startsWith('en') ? '🔊' : '○';
     opt.textContent = `${flag} ${v.name} (${v.lang})`;
     ttsVoiceSel.appendChild(opt);
   });
 
-  // 기본값: en-US 원어민 목소리 우선
-  const prefIdx = ttsVoices.findIndex(v =>
-    v.lang === 'en-US' && /natural|google|samantha|zira/i.test(v.name)
+  // 기본값: Google US English 또는 en-US 우선
+  const prefIdx = sorted.findIndex(v =>
+    /google us english|samantha|zira|david/i.test(v.name) ||
+    (v.lang === 'en-US' && v.localService === false)
   );
   ttsVoiceSel.selectedIndex = prefIdx >= 0 ? prefIdx : 0;
   ttsEnVoice = ttsVoices[ttsVoiceSel.selectedIndex];
+
+  const enCount = enVoices.length;
+  setTtsStatus(
+    `✅ 영어 음성 ${enCount}개 로드 완료 — 목소리를 선택 후 ▶ 테스트를 눌러보세요`,
+    '#38bdf8'
+  );
+  if(showFeedback) ttsReloadBtn.textContent = '✓';
+  setTimeout(()=>{ ttsReloadBtn.textContent = '↺'; }, 1500);
 }
 
-// 브라우저마다 음성 로드 타이밍이 다름
-loadVoices();
-if(synth.onvoiceschanged !== undefined) synth.onvoiceschanged = loadVoices;
-setTimeout(loadVoices, 500);  // 일부 브라우저용 fallback
+// Chrome: onvoiceschanged 이벤트로 자동 로드
+if(synth.onvoiceschanged !== undefined) {
+  synth.onvoiceschanged = () => loadVoices(false);
+}
+// 초기 시도 + 재시도 (Chrome은 첫 호출 시 빈 배열 반환하는 경우 있음)
+loadVoices(false);
+setTimeout(()=> loadVoices(false), 300);
+setTimeout(()=> loadVoices(false), 1000);
+setTimeout(()=> loadVoices(false), 3000);
+
+// ↺ 수동 새로고침 버튼
+ttsReloadBtn.addEventListener('click', ()=> {
+  setTtsStatus('🔄 음성 목록 불러오는 중...', '#f0b429');
+  loadVoices(true);
+});
 
 ttsVoiceSel.addEventListener('change', () => {
   ttsEnVoice = ttsVoices[parseInt(ttsVoiceSel.value)];
+  setTtsStatus(`선택됨: ${ttsEnVoice.name} (${ttsEnVoice.lang})`, '#38bdf8');
 });
 
 // ── 슬라이더 ────────────────────────────────────────
@@ -1803,8 +1855,11 @@ ttsToggle.addEventListener('change', () => {
   ttsVoiceRow.style.pointerEvents = ttsEnabled ? 'auto' : 'none';
   ttsOnLabel.classList.toggle('show', ttsEnabled);
   if(!ttsEnabled) { synth.cancel(); ttsWave.classList.remove('show'); fsTtsWave.classList.remove('show'); }
-  // 음성 목록이 아직 없으면 다시 시도
-  if(ttsEnabled && ttsVoices.length === 0) loadVoices();
+  // 토글 켤 때 항상 음성 목록 다시 시도
+  if(ttsEnabled) {
+    setTimeout(()=> loadVoices(false), 100);
+    setTtsStatus('🔄 음성 목록 불러오는 중...', '#f0b429');
+  }
 });
 
 // ── 테스트 버튼 ────────────────────────────────────
