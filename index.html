@@ -709,6 +709,13 @@
   .tts-controls {
     display:grid; grid-template-columns:1fr 1fr 1fr;
     gap:12px; margin-bottom:12px;
+    transition:opacity 0.3s;
+  }
+  /* 잠금 클래스 — inline style 대신 이걸로 제어 */
+  .tts-locked {
+    opacity:0.35 !important;
+    pointer-events:none !important;
+    user-select:none !important;
   }
   .tts-ctrl { display:flex; flex-direction:column; gap:6px; }
   .tts-ctrl-label {
@@ -872,7 +879,7 @@
       </label>
     </div>
 
-    <div class="tts-controls" id="ttsControls" style="opacity:0.35;pointer-events:none;">
+    <div class="tts-controls tts-locked" id="ttsControls">
       <div class="tts-ctrl">
         <div class="tts-ctrl-label">속도 <span id="ttsRateVal">1.0</span></div>
         <input type="range" class="tts-range" id="ttsRate" min="0.5" max="1.8" step="0.1" value="1.0">
@@ -887,7 +894,7 @@
       </div>
     </div>
 
-    <div id="ttsVoiceRow" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;opacity:0.35;pointer-events:none;">
+    <div id="ttsVoiceRow" class="tts-locked" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
       <select class="tts-voice-select" id="ttsVoiceSelect" style="flex:1;min-width:160px;">
         <option>🔊 음성 로딩 중... (토글을 껐다 켜보세요)</option>
       </select>
@@ -1850,10 +1857,9 @@ ttsVolSlider.addEventListener('input', () => {
 ttsToggle.addEventListener('change', () => {
   ttsEnabled = ttsToggle.checked;
 
-  // ✅ style 속성 직접 세팅 (충돌 없이 명시적으로)
+  // classList로 잠금/해제 — inline style 충돌 없음
   [ttsControls, ttsVoiceRow].forEach(el => {
-    el.style.setProperty('opacity',        ttsEnabled ? '1'    : '0.35');
-    el.style.setProperty('pointer-events', ttsEnabled ? 'auto' : 'none');
+    el.classList.toggle('tts-locked', !ttsEnabled);
   });
 
   ttsOnLabel.classList.toggle('show', ttsEnabled);
